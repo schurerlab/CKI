@@ -1,0 +1,12 @@
+name: Appkin
+title:
+username:
+account: rimsk
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1068811
+bundleId: 2323291
+url: https://rimsk.shinyapps.io/Appkin/
+when: 1565894991.49784
+asMultiple: FALSE
+asStatic: FALSE
