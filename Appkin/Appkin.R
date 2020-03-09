@@ -101,12 +101,12 @@ ui <- fluidPage(theme = shinytheme("united"),
                                                  # radioButtons("Kinase", "Status", selected = NULL , choices = c("Understudied", "Studied") ),
                                                  useShinyjs(),
                                                  hr(),
-                                                 checkboxGroupInput("SelectTDL", "TDL", selected = NULL, choices = c("Tbio", "Tchem", "Tdark", "Tclin") ),
+                                                 checkboxGroupInput("SelectTDL", "TDL", selected = NULL, choices = c("Tdark","Tbio", "Tclin", "Tchem" ) ),
                                                  hr(),
                                                  checkboxGroupInput("kinaseType",  label = "Kinase Type", choices = c("Protein kinases" = "protein kinase" ,"Non-protein kinase"), selected = NULL),
                                                  
                                                  hr(),
-                                                 checkboxGroupInput("kinaseGroup",  label = "Kinase Group", choices = c("AGC group" ,"Atypical group", "CAMK group", "Carbohydrate kinase", "CK1 group", "CMGC group", "Lipid kinase", "Nucleoside/nucleotide kinase","RGC group",  "STE group", "TK group", "TKL group", "Unclassified protein", "Other group", "Other small molecule kinase"), selected =  NULL ),
+                                                 checkboxGroupInput("kinaseGroup",  label = "Kinase Group", choices = c("AGC group" ,"Atypical group", "CAMK group",  "Carbohydrate kinase" = "carbohydrate kinase", "CK1 group", "CMGC group", "Lipid kinase" = "lipid kinase", "Nucleoside/nucleotide kinase" = "nucleoside/nucleotide kinase","RGC group",  "STE group", "TK group", "TKL group", "Unclassified protein", "Other group" = "other group", "Other small molecule kinase" = "other small molecule kinase"), selected =  NULL ),
                                                  
                                                  hr(),
                                                  checkboxGroupInput("MOA",  label = "MOA Targets", choices = c("Yes" ,"No"), selected = NULL),
@@ -118,10 +118,12 @@ ui <- fluidPage(theme = shinytheme("united"),
                                              )
                                       ),   
                                       column(6, plotlyOutput("scatter")), #, textOutput("selected"))
-                                      column(8, DT::dataTableOutput("mytable2"), textOutput("selected")),
+                                      #column(8, DT::dataTableOutput("mytable2"), textOutput("selected")),
+                                      column(8, dataTableOutput("mytable2"), textOutput("selected")),
                                       br(),
                                       
                                       column(8, tags$p(class = 'text-center', downloadButton('filt_table', 'Download Filtered Data'))
+                          
                                     ))),
                            ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
                            #### UI TAB3 #### 
@@ -210,6 +212,7 @@ ui <- fluidPage(theme = shinytheme("united"),
                                              br(), 
                                              
                                              panel_div(class_type = "primary",panel_title = "Download complete dataset", content = strong("3. Stage data TNM for cancer type ACC, BLCA,  BRCA,  CESC,  CHOL, COAD, ESCA, HNSC, KICH, KIRC, KIRP,  LUAD, LUSC, PAAD, PRAD, READ, SKCM, STAD, THCA")), 
+                                             selectInput("Cancer", "Choose the Cancer", sort(unique(as.character(rank_data[,2]))), selected = "BLCA"),
                                              downloadButton('Stage_table', 'Download Data'),
                                              br(),
                                              br()
@@ -239,6 +242,10 @@ colnames(Survival_Kinases) <- c("times", "patient.vital_status", "expr", "cohort
 rank_data <- data.frame(readRDS("data/Kinase_full_information_for_App.rds"))
 colnames(rank_data) <- c("Gene", "Cancer",   "TDL",  "IDG_Status",  "Kinase_Score", "Rank",     "Kinase_Type",  "Kinase_Group",  "Kinase_Family", "Kinase_Protein",  "MOA_Targets")
 rank_data$Kinase_Score <- round(rank_data$Kinase_Score, 2)
+neworder <- c("Tdark", "Tbio" , "Tchem", "Tclin")
+library(plyr)  ## or dplyr (transform -> mutate)
+rank_data <- arrange(transform(rank_data,
+                           TDL=factor(TDL,levels=neworder)),TDL)
 #rank_data$Kinase_score <- as.numeric(rank_data$Kinase_score)
 #rank_data <- rank_data[,c(1,10,2,3,11,12, 5:8)]
 Kin <- unique(rank_data$Gene)
@@ -397,10 +404,12 @@ server <- shinyServer(function(input, output, session) {
   
   })
   
-  
-  output$mytable2 <- DT::renderDataTable({ 
+  mytable1 <- reactive({
+  #output$mytable2 <-renderDT({
+  #output$mytable2 <- DT::renderDataTable({ 
+
     
-    data <- as.data.frame(rank_data, selection='single')
+    datatable(data <- as.data.frame(rank_data, selection='single'))
     
     filtered <- data
     if(input$Gene == "All"){
@@ -477,6 +486,21 @@ server <- shinyServer(function(input, output, session) {
       
     
   })
+    
+  
+  output$mytable2 <-renderDT({
+    mytable1()
+  })
+  
+  output$filt_table <- downloadHandler(
+    filename = function() {
+      paste("filt_output", ".csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(mytable1() , file, row.names = TRUE,sep="\t")
+    }
+  )
+
   
   
   
@@ -489,16 +513,66 @@ server <- shinyServer(function(input, output, session) {
     rank_data[rank_data$TDL %in% input$SelectTDL,]
   })
   
+  user_iris2 <- reactive({
+    dd <- user_iris1()
+    dd[dd$Kinase_Type %in% input$kinaseType,]
+  })
+  
+  user_iris3 <- reactive({
+    dd <- user_iris2()
+    dd[dd$Kinase_Group %in% input$kinaseGroup,]
+  })
+  
+  user_iris4 <- reactive({
+    dd <- user_iris3()
+    dd[dd$MOA_Targets %in% input$MOA,]
+  })
+  
+  user_iris5 <- reactive({
+    rank_data[rank_data$Kinase_Type %in% input$kinaseType,]
+  })
+  
+  user_iris6 <- reactive({
+    rank_data[rank_data$Kinase_Group %in% input$kinaseGroup,]
+  })
+  
+  user_iris7 <- reactive({
+    rank_data[rank_data$MOA_Targets %in% input$MOA,]
+  })
+  
+  
+  user_iris8 <- reactive({
+    rank_data[rank_data$Kinase_Type %in% input$kinaseType & rank_data$Kinase_Group %in% input$kinaseGroup,]
+  })
+  
+  user_iris9 <- reactive({
+    rank_data[rank_data$Kinase_Type %in% input$kinaseType & rank_data$MOA_Targets %in% input$MOA,]
+  })
+  
+  user_iris10 <- reactive({
+    rank_data[rank_data$TDL %in% input$SelectTDL & rank_data$Kinase_Group %in% input$kinaseGroup,]
+  })
+  
+  
   sd <- SharedData$new(user_iris)
   sd1 <- SharedData$new(user_iris1)
-  
-  output$scatter <- renderPlotly({
+  sd2 <- SharedData$new(user_iris2)
+  sd3 <- SharedData$new(user_iris3)
+  sd4 <- SharedData$new(user_iris4)
+  sd5 <- SharedData$new(user_iris5)
+  sd6 <- SharedData$new(user_iris6)
+  sd7 <- SharedData$new(user_iris7)
+  sd8 <- SharedData$new(user_iris8)
+  sd9 <- SharedData$new(user_iris9)
+  sd10 <- SharedData$new(user_iris10)
+ 
+   output$scatter <- renderPlotly({
     
     if(input$Gene == "All"){
     p <- ggplot(rank_data, aes(x=Kinase_Score, y=Cancer,  color  = TDL,  text = paste("gene:",Gene))) +
     facet_grid(. ~ TDL) +
     geom_point(alpha = 1 ) +
-    scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+    scale_colour_manual(values = c( Tdark = "black" , Tbio = "red", Tchem = "green", Tclin = "blue")) +
     labs(x='') + theme_minimal()
     theme(axis.text.x = element_text(angle = 90,
                                      hjust = 1,
@@ -506,6 +580,20 @@ server <- shinyServer(function(input, output, session) {
     
     if (!is.null(input$SelectTDL)) {
       p <- ggplot(sd1, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tdark = "black", Tbio = "red", Tchem = "green", Tclin = "blue" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$kinaseType)) {
+      p <- ggplot(sd5, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
         geom_point(alpha = 1) +
         facet_grid(. ~ TDL, scales = "free_x") +
         scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
@@ -517,7 +605,120 @@ server <- shinyServer(function(input, output, session) {
     }
     
     ggplotly(p, tooltip=c("x", "y"))
-  } else {
+    
+    if (!is.null(input$kinaseGroup)) {
+      p <- ggplot(sd6, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$MOA)) {
+      p <- ggplot(sd7, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$kinaseType) & !is.null(input$kinaseGroup)) {
+      p <- ggplot(sd8, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$kinaseType) & !is.null(input$MOA)) {
+      p <- ggplot(sd9, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$kinaseType) & !is.null(input$SelectTDL)) {
+      p <- ggplot(sd2, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$kinaseType) & !is.null(input$SelectTDL) &  !is.null(input$kinaseGroup))  {
+      p <- ggplot(sd3, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$kinaseType) & !is.null(input$SelectTDL) &  !is.null(input$kinaseGroup) & !is.null(input$MOA))  {
+      p <- ggplot(sd4, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+    if (!is.null(input$SelectTDL) &  !is.null(input$kinaseGroup))  {
+      p <- ggplot(sd10, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
+        geom_point(alpha = 1) +
+        facet_grid(. ~ TDL, scales = "free_x") +
+        scale_colour_manual(values = c( Tbio = "red", Tchem = "green", Tclin = "blue", Tdark = "black" )) +
+        labs(x='') + theme_minimal()
+      theme(axis.text.x = element_text(angle = 90,
+                                       hjust = 1,
+                                       size=3))
+      
+    }
+    
+    ggplotly(p, tooltip=c("x", "y"))
+    
+     }else {
       p <- ggplot(sd, aes(x=Kinase_Score, y=Cancer, color = TDL, text = paste("gene:",Gene))) +
         geom_point(alpha = 1) +
         facet_wrap(. ~ TDL, scales = "free_x") +
@@ -755,10 +956,10 @@ server <- shinyServer(function(input, output, session) {
   
   output$Stage_table <- downloadHandler(
     filename = function() {
-      paste("output_Stage", "tar", sep = ".")
+      paste("output_Stage", ".csv", sep = "")
     },
     content = function(file) {
-      tar(file, row.names = TRUE,sep="\t")
+      write.csv(dataFrame_study, file, row.names = TRUE,sep="\t")
     }
   )
   
